@@ -49,18 +49,40 @@ import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.session.Configuration;
 
 /**
+ * 类型处理器（源自官方文档翻译）实现
  * @author Clinton Begin
  * @author Kazuki Shimizu
  */
 public final class TypeHandlerRegistry {
 
+  /**
+   * 对 JDK 中的 sql.Type 包装成枚举类型
+   * 在 EnumMap 中其实用一个 Object[] 来保存 TypeHandler，索引就是 Enum.ordinal() 的返回值
+   */
   private final Map<JdbcType, TypeHandler<?>>  jdbcTypeHandlerMap = new EnumMap<>(JdbcType.class);
+  /**
+   * 现在有三种类型，实体类、数据库类型和类型处理器需要进行映射，遵从 Bean.class -> (JdbcType -> TypeHandler) 出发，
+   * 使用 Map<Type, Map<JdbcType, TypeHandler<?>>> 这样一个数据结构，可以很好的处理一个 Bean.class 对应多个数据库类型
+   */
   private final Map<Type, Map<JdbcType, TypeHandler<?>>> typeHandlerMap = new ConcurrentHashMap<>();
+  /**
+   * 用来处理 Object、Jdbc.OTHER 等
+   */
   private final TypeHandler<Object> unknownTypeHandler;
+  /**
+   * 所有的类型处理器也进行 Class -> Instance 的映射，供 Builder 使用，当在运行时传入一个未知的处理器就直接通过反射
+   * 生成实例，不会服用。
+   */
   private final Map<Class<?>, TypeHandler<?>> allTypeHandlersMap = new HashMap<>();
 
+  /**
+   * 用来标志 Bean.class 不存在数据库类型映射，有点空对象模式的味道
+   */
   private static final Map<JdbcType, TypeHandler<?>> NULL_TYPE_HANDLER_MAP = Collections.emptyMap();
 
+  /**
+   * 枚举类有单独的处理器
+   */
   private Class<? extends TypeHandler> defaultEnumTypeHandler = EnumTypeHandler.class;
 
   /**
@@ -72,6 +94,8 @@ public final class TypeHandlerRegistry {
 
   /**
    * The constructor that pass the MyBatis configuration.
+   * 这个构造器实现了很多内置的类型处理器的注册，当然也可以通过 TypeHandler 接口或者继承 BaseTypehandler
+   * 实现自定义类型处理器
    *
    * @param configuration a MyBatis configuration
    * @since 3.5.4
@@ -327,10 +351,18 @@ public final class TypeHandlerRegistry {
 
   //
   // REGISTER INSTANCE
+  // 类型处理器实例注册
   //
 
   // Only handler
 
+  /**
+   * 注册类型处理器实例，通过反射获取处理类型注解，
+   * 如果没有指定的处理类型，判断类型处理器是否是 TypeReference 的子类，注册其 rawType（自动发现处理类型）
+   * 如果并不是 TypeReference 的子类就注册为 null 的处理器
+   * @param typeHandler 类型处理器实例
+   * @param <T> 处理类型（可以为 Null）
+   */
   @SuppressWarnings("unchecked")
   public <T> void register(TypeHandler<T> typeHandler) {
     boolean mappedTypeFound = false;
@@ -386,6 +418,13 @@ public final class TypeHandlerRegistry {
     register((Type) type, jdbcType, handler);
   }
 
+  /**
+   * 真正的注册方法，那么多重载方法是对不同参数的处理，最后必须 Bean.class、JdbcType、类型处理器实例进行注册
+   * 将映射关系保存到 typeHandlerMap 中，并且实现 TypeHandler.class -> Instance 的映射保存。
+   * @param javaType Bean.class
+   * @param jdbcType 数据库类型
+   * @param handler 处理器实例
+   */
   private void register(Type javaType, JdbcType jdbcType, TypeHandler<?> handler) {
     if (javaType != null) {
       Map<JdbcType, TypeHandler<?>> map = typeHandlerMap.get(javaType);
@@ -404,6 +443,11 @@ public final class TypeHandlerRegistry {
 
   // Only handler type
 
+  /**
+   * 参数只有类型处理器，如果它有 MapperTypes 注解表明对那些 Bean.class 进行处理，则进行类型映射关系注册
+   * 如果无指定处理类型就生成其实例并调用重载方法进行注册
+   * @param typeHandlerClass 处理器类型
+   */
   public void register(Class<?> typeHandlerClass) {
     boolean mappedTypeFound = false;
     MappedTypes mappedTypes = typeHandlerClass.getAnnotation(MappedTypes.class);
@@ -436,6 +480,13 @@ public final class TypeHandlerRegistry {
 
   // Construct a handler (used also from Builders)
 
+  /**
+   * 可以生成 Bean.class 的类型处理器实例，如果没有 Bean.class 就调用类型处理器的无参构造器生成实例
+   * @param javaTypeClass 指定处理类型
+   * @param typeHandlerClass 类型处理器类型
+   * @param <T> Bean.class。这算是没有泛型的处理办法吗？
+   * @return 处理器实例
+   */
   @SuppressWarnings("unchecked")
   public <T> TypeHandler<T> getInstance(Class<?> javaTypeClass, Class<?> typeHandlerClass) {
     if (javaTypeClass != null) {
@@ -458,6 +509,10 @@ public final class TypeHandlerRegistry {
 
   // scan
 
+  /**
+   * 对一个包的类型处理器进行注册，通过反射方式获取类型信息
+   * @param packageName 包路径
+   */
   public void register(String packageName) {
     ResolverUtil<Class<?>> resolverUtil = new ResolverUtil<>();
     resolverUtil.find(new ResolverUtil.IsA(TypeHandler.class), packageName);

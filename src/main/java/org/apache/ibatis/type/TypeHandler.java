@@ -21,13 +21,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
+ * 定义数据和类型的关系处理接口
  * @author Clinton Begin
  */
 public interface TypeHandler<T> {
 
+  // 设值
   void setParameter(PreparedStatement ps, int i, T parameter, JdbcType jdbcType) throws SQLException;
 
   /**
+   * 取值
    * @param columnName Colunm name, when configuration <code>useColumnLabel</code> is <code>false</code>
    */
   T getResult(ResultSet rs, String columnName) throws SQLException;

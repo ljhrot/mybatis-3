@@ -29,15 +29,26 @@ import org.apache.ibatis.type.TypeHandler;
 import org.apache.ibatis.type.TypeHandlerRegistry;
 
 /**
+ * 抽象构建类
  * @author Clinton Begin
  */
 public abstract class BaseBuilder {
+  /**
+   * Mybatis 关乎自身的配置
+   */
   protected final Configuration configuration;
+  /**
+   * 类型别名注册表
+   */
   protected final TypeAliasRegistry typeAliasRegistry;
+  /**
+   * 类型处理器注册表
+   */
   protected final TypeHandlerRegistry typeHandlerRegistry;
 
   public BaseBuilder(Configuration configuration) {
     this.configuration = configuration;
+    // 显然类型别名注册表和类型处理器注册表也保存在 Configuration 中
     this.typeAliasRegistry = this.configuration.getTypeAliasRegistry();
     this.typeHandlerRegistry = this.configuration.getTypeHandlerRegistry();
   }
@@ -45,6 +56,10 @@ public abstract class BaseBuilder {
   public Configuration getConfiguration() {
     return configuration;
   }
+
+  /**
+   * 下面四个方法，不管是取值还是赋值，都进行默认值处理（保底）
+   */
 
   protected Pattern parseExpression(String regex, String defaultValue) {
     return Pattern.compile(regex == null ? defaultValue : regex);
@@ -62,6 +77,10 @@ public abstract class BaseBuilder {
     value = value == null ? defaultValue : value;
     return new HashSet<>(Arrays.asList(value.split(",")));
   }
+
+  /**
+   * 下面的方法大致是通过 String（alias 之类）获取 JdbcType、ResultSetType、Class、TypeHandler
+   */
 
   protected JdbcType resolveJdbcType(String alias) {
     if (alias == null) {

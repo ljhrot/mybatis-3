@@ -39,6 +39,8 @@ public class UnknownTypeHandler extends BaseTypeHandler<Object> {
 
   /**
    * The constructor that pass a MyBatis configuration.
+   * typeHandlerRegistrySupplier 这个字段绕了一圈指向的是 configuration.typeHandlerRegistry
+   * configuration.typeHandlerRegistry 又通过 unknownTypeHandler 指向 它，循环引用了
    *
    * @param configuration a MyBatis configuration
    * @since 3.5.4

@@ -90,6 +90,10 @@ public class XMLConfigBuilder extends BaseBuilder {
     this.parser = parser;
   }
 
+  /**
+   * 开始解析 Configuration 的入口，构造方法执行完马上就调用了
+   * @return 解析完毕的 configuration
+   */
   public Configuration parse() {
     if (parsed) {
       throw new BuilderException("Each XMLConfigBuilder can only be used once.");
@@ -99,18 +103,26 @@ public class XMLConfigBuilder extends BaseBuilder {
     return configuration;
   }
 
+  /**
+   * 真正解析逻辑，配置、设置、类型别名、插件、对象工厂……
+   * @param root XNode /configuration
+   */
   private void parseConfiguration(XNode root) {
     try {
       //issue #117 read properties first
       propertiesElement(root.evalNode("properties"));
       Properties settings = settingsAsProperties(root.evalNode("settings"));
+      // 调整设置
       loadCustomVfs(settings);
       loadCustomLogImpl(settings);
+
       typeAliasesElement(root.evalNode("typeAliases"));
       pluginElement(root.evalNode("plugins"));
       objectFactoryElement(root.evalNode("objectFactory"));
+      // 这两个标签不出现在 .xml 中
       objectWrapperFactoryElement(root.evalNode("objectWrapperFactory"));
       reflectorFactoryElement(root.evalNode("reflectorFactory"));
+      // 对默认设置进行覆盖
       settingsElement(settings);
       // read it after objectFactory and objectWrapperFactory issue #631
       environmentsElement(root.evalNode("environments"));
@@ -122,6 +134,12 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 解析 configuration 中的 settings 标签
+   * 可设置的属性必须是 Configuration 的字段
+   * @param context XNode /configuration/settings
+   * @return 自定义设置
+   */
   private Properties settingsAsProperties(XNode context) {
     if (context == null) {
       return new Properties();
@@ -137,6 +155,11 @@ public class XMLConfigBuilder extends BaseBuilder {
     return props;
   }
 
+  /**
+   * 指定 VFS 实现
+   * @param props /configuration/settings
+   * @throws ClassNotFoundException 类不存在
+   */
   private void loadCustomVfs(Properties props) throws ClassNotFoundException {
     String value = props.getProperty("vfsImpl");
     if (value != null) {
@@ -151,15 +174,24 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 指定日志实现
+   * @param props /configuration/settings
+   */
   private void loadCustomLogImpl(Properties props) {
     Class<? extends Log> logImpl = resolveClass(props.getProperty("logImpl"));
     configuration.setLogImpl(logImpl);
   }
 
+  /**
+   * 自定义类型别名（TypeAliases）
+   * @param parent XNode /configuration/typeAliases
+   */
   private void typeAliasesElement(XNode parent) {
     if (parent != null) {
       for (XNode child : parent.getChildren()) {
         if ("package".equals(child.getName())) {
+          // 指定包名
           String typeAliasPackage = child.getStringAttribute("name");
           configuration.getTypeAliasRegistry().registerAliases(typeAliasPackage);
         } else {
@@ -180,10 +212,23 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 自定义插件设置，插件是指那些语句执行过程中某些可以拦截点进行调用，有四个拦截点
+   * TODO 介绍一下拦截点，而且有个问题，拦截器是怎么起作用的
+   * 1.Executor (update, query, flushStatements, commit, rollback, getTransaction, close, isClosed)
+   * 2.ParameterHandler (getParameterObject, setParameters)
+   * 3.ResultSetHandler (handleResultSets, handleOutputParameters)
+   * 4.StatementHandler (prepare, parameterize, batch, update, query)
+   *
+   * @param parent XNode /configuration/plugins
+   * @throws Exception ClassNotFound
+   */
   private void pluginElement(XNode parent) throws Exception {
     if (parent != null) {
       for (XNode child : parent.getChildren()) {
+        // 拦截器
         String interceptor = child.getStringAttribute("interceptor");
+        // 拦截器属性
         Properties properties = child.getChildrenAsProperties();
         Interceptor interceptorInstance = (Interceptor) resolveClass(interceptor).getDeclaredConstructor().newInstance();
         interceptorInstance.setProperties(properties);
@@ -192,6 +237,14 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 自定义对象工厂实现，可以在参加结果对象的新实例做一些处理，默认实现只是通过构造方法实现实例化。
+   * 需要继承 DefaultObjectFactory，覆盖特定方法
+   *
+   * @see org.apache.ibatis.reflection.factory.DefaultObjectFactory
+   * @param context
+   * @throws Exception
+   */
   private void objectFactoryElement(XNode context) throws Exception {
     if (context != null) {
       String type = context.getStringAttribute("type");
@@ -218,23 +271,32 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * configuration 中的 properties 标签解析
+   * @param context XNode("/configuration")
+   * @throws Exception 不允许 resource 和 url 属性同时存在
+   */
   private void propertiesElement(XNode context) throws Exception {
     if (context != null) {
+      // 1. 首先获取子标签的配置，并且设为默认值
       Properties defaults = context.getChildrenAsProperties();
       String resource = context.getStringAttribute("resource");
       String url = context.getStringAttribute("url");
       if (resource != null && url != null) {
         throw new BuilderException("The properties element cannot specify both a URL and a resource based property file reference.  Please specify one or the other.");
       }
+      // 2. 然后获取 properties 标签的 resource 或者 url 属性，获取配置并且进行覆盖
       if (resource != null) {
         defaults.putAll(Resources.getResourceAsProperties(resource));
       } else if (url != null) {
         defaults.putAll(Resources.getUrlAsProperties(url));
       }
+      // 3. 最后将构造参数输入的配置进行再次覆盖，即优先级最高
       Properties vars = configuration.getVariables();
       if (vars != null) {
         defaults.putAll(vars);
       }
+      // 保存配置到 XPath 解析器以及重新覆盖 configuration.variables
       parser.setVariables(defaults);
       configuration.setVariables(defaults);
     }
@@ -269,6 +331,11 @@ public class XMLConfigBuilder extends BaseBuilder {
     configuration.setConfigurationFactory(resolveClass(props.getProperty("configurationFactory")));
   }
 
+  /**
+   * 环境配置
+   * @param context XNode /configuration/environments
+   * @throws Exception
+   */
   private void environmentsElement(XNode context) throws Exception {
     if (context != null) {
       if (environment == null) {
@@ -276,8 +343,11 @@ public class XMLConfigBuilder extends BaseBuilder {
       }
       for (XNode child : context.getChildren()) {
         String id = child.getStringAttribute("id");
+        // 判断是否启动环境
         if (isSpecifiedEnvironment(id)) {
+          // 事务管理器
           TransactionFactory txFactory = transactionManagerElement(child.evalNode("transactionManager"));
+          // 数据源
           DataSourceFactory dsFactory = dataSourceElement(child.evalNode("dataSource"));
           DataSource dataSource = dsFactory.getDataSource();
           Environment.Builder environmentBuilder = new Environment.Builder(id)
