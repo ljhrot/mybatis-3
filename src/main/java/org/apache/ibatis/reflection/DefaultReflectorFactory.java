@@ -35,6 +35,14 @@ public class DefaultReflectorFactory implements ReflectorFactory {
     this.classCacheEnabled = classCacheEnabled;
   }
 
+  /**
+   * 有点简单工厂模式的味道，因为是默认开启反射缓存的
+   * 1. 从缓存 Map 中查找是否有指定类的反射类实例
+   * 2. 不存在调用反射构造方法传入类型，创建实例，同时加入缓存
+   * 3. 返回反射类实例
+   * @param type 被反射类型
+   * @return 反射类实例
+   */
   @Override
   public Reflector findForClass(Class<?> type) {
     if (classCacheEnabled) {

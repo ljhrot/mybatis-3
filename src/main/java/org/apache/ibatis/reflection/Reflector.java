@@ -42,6 +42,7 @@ import org.apache.ibatis.reflection.invoker.SetFieldInvoker;
 import org.apache.ibatis.reflection.property.PropertyNamer;
 
 /**
+ * 主要通过通过反射获取目标类各种信息，包括可读可写的字段，其类型还有对应的方法。
  * This class represents a cached set of class definition information that
  * allows for easy mapping between property names and getter/setter methods.
  *
@@ -82,6 +83,13 @@ public class Reflector {
       .findAny().ifPresent(constructor -> this.defaultConstructor = constructor);
   }
 
+  /**
+   * 1.获取类及其父类的说有方法，包括私有的
+   * 2.过滤出没有参数的方法，以及 "is" 和 "get" 开头的方法
+   * 3.通过方法名获取字段名称，形成键值对加入到冲突集合，因为可能 isXXX 也会返回字段值而不是布尔值
+   * 4.解决冲突
+   * @param clazz 被反射类型
+   */
   private void addGetMethods(Class<?> clazz) {
     Map<String, List<Method>> conflictingGetters = new HashMap<>();
     Method[] methods = getClassMethods(clazz);
@@ -90,6 +98,17 @@ public class Reflector {
     resolveGetterConflicts(conflictingGetters);
   }
 
+  /**
+   * 处理冲突方法集合，比如字段可能是布尔类型，或者 isXXX 返回的是字段类型
+   * 1.遍历冲突集合
+   * 2.默认第一个就是方法就是 winner 方法
+   * 3.循环其他方法，与 winner 比较返回值
+   * 4.如果返回的类型一致，判断返回类型是否是布尔类型，如果是说明方法重复，这时该方法名以"is"开头则替换 winner
+   * 5.如果 winner 是 candidate 的子类，子类占优先，空操作
+   * 6.如果 winner 是 candidate 的父类，candidate 替换 winner
+   * 7.筛选出来的方法加入 getMethods，返回值加入 getTypes
+   * @param conflictingGetters 冲突方法集合
+   */
   private void resolveGetterConflicts(Map<String, List<Method>> conflictingGetters) {
     for (Entry<String, List<Method>> entry : conflictingGetters.entrySet()) {
       Method winner = null;
@@ -122,6 +141,14 @@ public class Reflector {
     }
   }
 
+  /**
+   * 将字段名称所对应的 getter 方法加入 getMethods 中
+   * 将字段名称所对应的类型加入到 getTypes 中
+   * 比较特殊的是如果是模糊方法 getMethods 中加入的 AmbiguousMethodInvoker，旧版是直接抛出异常
+   * @param name 字段名称
+   * @param method 方法
+   * @param isAmbiguous 是否是模糊方法
+   */
   private void addGetMethod(String name, Method method, boolean isAmbiguous) {
     MethodInvoker invoker = isAmbiguous
         ? new AmbiguousMethodInvoker(method, MessageFormat.format(
@@ -133,6 +160,10 @@ public class Reflector {
     getTypes.put(name, typeToClass(returnType));
   }
 
+  /**
+   * 跟 addGetMethods 不同的地方在于冲突方法的处理上
+   * @param clazz 被反射类型
+   */
   private void addSetMethods(Class<?> clazz) {
     Map<String, List<Method>> conflictingSetters = new HashMap<>();
     Method[] methods = getClassMethods(clazz);
@@ -148,6 +179,15 @@ public class Reflector {
     }
   }
 
+  /**
+   * 解决冲突方法集合
+   * 1.遍历集合，获取冲突方法
+   * 2.如果 getter 方法不是模糊方法并且 setter 方法的第一个参数类型匹配 getterType 直接加入 setMethods 中，跳转 4
+   * 3.到这一步说明 setter 可能是重载方法，从重载方法中找出一个最佳匹配的方法
+   * 4.冲突方法遍历结束，如果 match 不为空说明找到最佳 setter 方法，调用 setMethod 方法
+   * 5.跳转 1
+   * @param conflictingSetters 冲突方法集合
+   */
   private void resolveSetterConflicts(Map<String, List<Method>> conflictingSetters) {
     for (String propName : conflictingSetters.keySet()) {
       List<Method> setters = conflictingSetters.get(propName);
@@ -172,6 +212,15 @@ public class Reflector {
     }
   }
 
+  /**
+   * 两个方法找出更参数更准确的方法
+   * 首先判断是否有继承关系，子类优先匹配
+   * 如果没有继承关系，说明 setter 方法重载且类型模糊，将 setter 1 添加到 setMethods 中，返回 null
+   * @param setter1 setter 方法 1
+   * @param setter2 setter 方法 2
+   * @param property 字段名称
+   * @return 更准确的方法，可为空
+   */
   private Method pickBetterSetter(Method setter1, Method setter2, String property) {
     if (setter1 == null) {
       return setter2;
@@ -193,6 +242,12 @@ public class Reflector {
     return null;
   }
 
+  /**
+   * 将 setter 方法加入 setMethods 集合
+   * 将 setter 调用参数类型加入 setTypes 集合
+   * @param name setter 方法名称
+   * @param method setter 方法
+   */
   private void addSetMethod(String name, Method method) {
     MethodInvoker invoker = new MethodInvoker(method);
     setMethods.put(name, invoker);

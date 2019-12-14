@@ -191,7 +191,7 @@ public class TypeAliasRegistry {
     }
     // issue #748
     String key = alias.toLowerCase(Locale.ENGLISH);
-    // 只有当注册表中存在同样的别名和同样的类型才会抛异常，也就是同样别名可以覆盖，不同别名可以指向同一个类型
+    // 只有当注册表中存在同样的别名会抛异常，不同别名可以指向同一个类型
     if (typeAliases.containsKey(key) && typeAliases.get(key) != null && !typeAliases.get(key).equals(value)) {
       throw new TypeException("The alias '" + alias + "' is already mapped to the value '" + typeAliases.get(key).getName() + "'.");
     }

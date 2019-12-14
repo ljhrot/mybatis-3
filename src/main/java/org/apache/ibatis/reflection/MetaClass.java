@@ -131,9 +131,16 @@ public class MetaClass {
     return null;
   }
 
+  /**
+   * 判断被元类描述的类是否有该字段可以设置
+   * @param name XML 中配置的属性
+   * @return 是否可设置
+   */
   public boolean hasSetter(String name) {
+    // 属性分词器，先对属性进行全限定名处理，如果包含 "." hasNext 就会返回 true
     PropertyTokenizer prop = new PropertyTokenizer(name);
     if (prop.hasNext()) {
+      // 如果全限定名就会递归处理最后一个
       if (reflector.hasSetter(prop.getName())) {
         MetaClass metaProp = metaClassForProperty(prop.getName());
         return metaProp.hasSetter(prop.getChildren());
@@ -141,6 +148,7 @@ public class MetaClass {
         return false;
       }
     } else {
+      // 直接根据反射类判断是否有该属性可以设置
       return reflector.hasSetter(prop.getName());
     }
   }

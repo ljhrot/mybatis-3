@@ -127,7 +127,9 @@ public class XMLConfigBuilder extends BaseBuilder {
       // read it after objectFactory and objectWrapperFactory issue #631
       environmentsElement(root.evalNode("environments"));
       databaseIdProviderElement(root.evalNode("databaseIdProvider"));
+      // 类型处理器
       typeHandlerElement(root.evalNode("typeHandlers"));
+      // 映射文件解析
       mapperElement(root.evalNode("mappers"));
     } catch (Exception e) {
       throw new BuilderException("Error parsing SQL Mapper Configuration. Cause: " + e, e);
@@ -144,9 +146,12 @@ public class XMLConfigBuilder extends BaseBuilder {
     if (context == null) {
       return new Properties();
     }
+    // 先将所有配置进行装载
     Properties props = context.getChildrenAsProperties();
     // Check that all settings are known to the configuration class
+    // 创建一个描述 Configuration 类信息的元类
     MetaClass metaConfig = MetaClass.forClass(Configuration.class, localReflectorFactory);
+    // 遍历所有设置的属性，检查是否是 Configuration 中可自行选择的设置
     for (Object key : props.keySet()) {
       if (!metaConfig.hasSetter(String.valueOf(key))) {
         throw new BuilderException("The setting " + key + " is not known.  Make sure you spelled it correctly (case sensitive).");
@@ -199,6 +204,7 @@ public class XMLConfigBuilder extends BaseBuilder {
           String type = child.getStringAttribute("type");
           try {
             Class<?> clazz = Resources.classForName(type);
+            // type 是必须的，而 alias 不是必须，会自动生成
             if (alias == null) {
               typeAliasRegistry.registerAlias(clazz);
             } else {
@@ -339,15 +345,16 @@ public class XMLConfigBuilder extends BaseBuilder {
   private void environmentsElement(XNode context) throws Exception {
     if (context != null) {
       if (environment == null) {
+        // 获取默认环境
         environment = context.getStringAttribute("default");
       }
       for (XNode child : context.getChildren()) {
         String id = child.getStringAttribute("id");
-        // 判断是否启动环境
+        // 判断是否是默认环境
         if (isSpecifiedEnvironment(id)) {
-          // 事务管理器
+          // 解析事务管理器
           TransactionFactory txFactory = transactionManagerElement(child.evalNode("transactionManager"));
-          // 数据源
+          // 解析数据源
           DataSourceFactory dsFactory = dataSourceElement(child.evalNode("dataSource"));
           DataSource dataSource = dsFactory.getDataSource();
           Environment.Builder environmentBuilder = new Environment.Builder(id)
@@ -400,6 +407,13 @@ public class XMLConfigBuilder extends BaseBuilder {
     throw new BuilderException("Environment declaration requires a DataSourceFactory.");
   }
 
+  /**
+   * 解析自定义类型处理器
+   * 1.遍历 typeHandlers 节点，获取每一个类型处理器
+   * 2.如果是指定包名进行注解扫描并注册
+   * 3.注册单个类型处理器
+   * @param parent XNode /configuration/typeHandlers
+   */
   private void typeHandlerElement(XNode parent) {
     if (parent != null) {
       for (XNode child : parent.getChildren()) {
@@ -407,12 +421,15 @@ public class XMLConfigBuilder extends BaseBuilder {
           String typeHandlerPackage = child.getStringAttribute("name");
           typeHandlerRegistry.register(typeHandlerPackage);
         } else {
+          // 获取属性，分别是 java 类型、jdbc 类型和处理器
           String javaTypeName = child.getStringAttribute("javaType");
           String jdbcTypeName = child.getStringAttribute("jdbcType");
           String handlerTypeName = child.getStringAttribute("handler");
+          // 通过名称获取 Class
           Class<?> javaTypeClass = resolveClass(javaTypeName);
           JdbcType jdbcType = resolveJdbcType(jdbcTypeName);
           Class<?> typeHandlerClass = resolveClass(handlerTypeName);
+          // 根据上面的三个属性调用对应方法进行类型处理器注册
           if (javaTypeClass != null) {
             if (jdbcType == null) {
               typeHandlerRegistry.register(javaTypeClass, typeHandlerClass);

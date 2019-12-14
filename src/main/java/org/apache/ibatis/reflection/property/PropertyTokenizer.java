@@ -26,6 +26,10 @@ public class PropertyTokenizer implements Iterator<PropertyTokenizer> {
   private String index;
   private final String children;
 
+  /**
+   * 可以鉴别出复合属性，数组类型（"[]")
+   * @param fullname 属性全名
+   */
   public PropertyTokenizer(String fullname) {
     int delim = fullname.indexOf('.');
     if (delim > -1) {
