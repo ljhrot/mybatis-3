@@ -89,6 +89,14 @@ public class CacheBuilder {
     return this;
   }
 
+  /**
+   * 1.设置默认的缓存类型和缓存装饰器
+   * 2.获取命名空间的构造方法，传入命名空间创建缓存实例
+   * 3.配置缓存
+   * 4.如果是内置缓存类，进行装饰器配置，也是通过反射实现实例化装饰器，同时配置日志装饰器等标准装饰器
+   * 5.如果是非日志类型缓存，调用日志缓存装饰器包装
+   * @return 返回缓存实例
+   */
   public Cache build() {
     setDefaultImplementations();
     Cache cache = newBaseCacheInstance(implementation, id);

@@ -89,6 +89,13 @@ public class XMLMapperBuilder extends BaseBuilder {
     this.resource = resource;
   }
 
+  /**
+   * Mapper 解析入口
+   * 1.判断是否解析过该 resource，解析过直接跳转处理可能为解析完全的节点
+   * 2.解析 mapper 节点
+   * 3.将 resource 标记为已解析
+   * 4.绑定 mapper 接口的命名空间
+   */
   public void parse() {
     if (!configuration.isResourceLoaded(resource)) {
       configurationElement(parser.evalNode("/mapper"));
@@ -105,6 +112,17 @@ public class XMLMapperBuilder extends BaseBuilder {
     return sqlFragments.get(refid);
   }
 
+  /**
+   * 真正解析 Mapper 文件
+   * 1.处理命名空间事项，将其绑定到 builderAssistant
+   * 2.处理 cacheRef 节点
+   * 3.处理 cache 节点
+   * 4.处理 parameterMap 节点，现已废弃
+   * 5.处理 resultMap 节点
+   * 6.处理 sql 节点
+   * 6.处理 CRUD 节点
+   * @param context XNode /mapper
+   */
   private void configurationElement(XNode context) {
     try {
       String namespace = context.getStringAttribute("namespace");
@@ -198,6 +216,16 @@ public class XMLMapperBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 解析 cache 配置
+   * 1.根据名称获取具体实现类
+   * 2.获取缓存淘汰策略
+   * 3.获取缓存刷新时间
+   * 4.获取缓存其他配置属性
+   * 5.获取缓存节点配置
+   * 6.使用构建助手实例构建缓存对象
+   * @param context XNode /mapper/cache
+   */
   private void cacheElement(XNode context) {
     if (context != null) {
       String type = context.getStringAttribute("type", "PERPETUAL");
